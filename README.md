@@ -3,6 +3,14 @@ A simple async Python module to bypass Cloudflare\'s anti-bot page. Based on aio
 
 This module would be helpful if you use Python3.5 and asyncio for concurrent crawling of web resources protected with CloudFlare.
 
+## Dependencies
+
+* Python 3.4+
+* **[aiohttp](https://pypi.python.org/pypi/aiohttp)** >= 0.21.2
+* **[js2py](https://pypi.python.org/pypi/Js2Py)** == 0.37
+
+Install with pip.
+
 ## Basic usage
 aiocfscrape is actually aiohttp.ClientSession wrapper. So aiohttp client reference (http://aiohttp.readthedocs.io/en/stable/client.html) can be used as the base.
 
