@@ -77,7 +77,7 @@ class CloudflareScraper(aiohttp.ClientSession):
             logging.error("[!] Unable to parse Cloudflare anti-bots page. "
                           "Try upgrading cloudflare-scrape, or submit a bug report "
                           "if you are running the latest version. Please read "
-                          "https://github.com/Anorov/cloudflare-scrape#updates "
+                          "https://github.com/pavlodvornikov/aiocfscrape#updates "
                           "before submitting a bug report.")
             raise
 

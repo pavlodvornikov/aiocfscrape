@@ -2,3 +2,7 @@ __pycache__/
 *.py[cod]
 .env/
 .idea/
+
+# Distribution / packaging
+dist/
+*.egg-info/
