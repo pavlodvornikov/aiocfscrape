@@ -38,10 +38,10 @@ class CloudflareScraper(aiohttp.ClientSession):
 
         elif resp.status == 403 and resp.headers.get("Server") == "cloudflare-nginx" and not allow_403:
             resp.close()
-            raise aiohttp.HttpProcessingError(message='CloudFlare returned HTTP 403. Your IP could be banned on CF '
-                                                      'or reCAPTCHA appeared. This error can be disabled with '
-                                                      'allow_403=True flag in request parameters e.g. '
-                                                      'session.get(url, allow_403=True).', headers=resp.headers)
+            raise aiohttp.http_exceptions.HttpProcessingError(message='CloudFlare returned HTTP 403. Your IP could be banned on CF '
+                                              'or reCAPTCHA appeared. This error can be disabled with '
+                                              'allow_403=True flag in request parameters e.g. '
+                                              'session.get(url, allow_403=True).', headers=resp.headers)
 
         # Otherwise, no Cloudflare anti-bot detected
         return resp
@@ -54,13 +54,14 @@ class CloudflareScraper(aiohttp.ClientSession):
         yield from asyncio.sleep(5, loop=self._loop)  # Cloudflare requires a delay before solving the challenge
 
         body = yield from resp.text()
-        parsed_url = urlparse(resp.url)
+        url = str(resp.url)
+        parsed_url = urlparse(url)
         domain = parsed_url.netloc
         submit_url = '{}://{}/cdn-cgi/l/chk_jschl'.format(parsed_url.scheme, domain)
 
         params = kwargs.setdefault("params", {})
         headers = kwargs.setdefault("headers", {})
-        headers["Referer"] = resp.url
+        headers["Referer"] = url
 
         try:
             params["jschl_vc"] = re.search(r'name="jschl_vc" value="(\w+)"', body).group(1)

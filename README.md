@@ -6,8 +6,8 @@ This module would be helpful if you use Python3.5 and asyncio for concurrent cra
 ## Dependencies
 
 * Python 3.4+
-* **[aiohttp](https://pypi.python.org/pypi/aiohttp)** >= 1.0.5
-* **[js2py](https://pypi.python.org/pypi/Js2Py)** == 0.37
+* **[aiohttp](https://pypi.python.org/pypi/aiohttp)** >= 2.2.5
+* **[js2py](https://pypi.python.org/pypi/Js2Py)** == 0.5
 
 Install with pip.
 
