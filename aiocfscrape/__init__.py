@@ -5,12 +5,12 @@ import logging
 
 import aiohttp
 import js2py
+from copy import deepcopy
 
 try:
     from urlparse import urlparse
 except ImportError:
     from urllib.parse import urlparse
-
 
 DEFAULT_USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36",
@@ -33,35 +33,37 @@ class CloudflareScraper(aiohttp.ClientSession):
         resp = yield from super()._request(method, url, *args, **kwargs)
 
         # Check if Cloudflare anti-bot is on
-        if resp.status == 503 and resp.headers.get("Server") == "cloudflare-nginx":
+        if resp.status == 503 and resp.headers.get("Server").startswith("cloudflare"):
             return (yield from self.solve_cf_challenge(resp, **kwargs))
 
-        elif resp.status == 403 and resp.headers.get("Server") == "cloudflare-nginx" and not allow_403:
+        elif resp.status == 403 and resp.headers.get("Server").startswith("cloudflare") and not allow_403:
             resp.close()
-            raise aiohttp.http_exceptions.HttpProcessingError(message='CloudFlare returned HTTP 403. Your IP could be banned on CF '
-                                              'or reCAPTCHA appeared. This error can be disabled with '
-                                              'allow_403=True flag in request parameters e.g. '
-                                              'session.get(url, allow_403=True).', headers=resp.headers)
+            raise aiohttp.http_exceptions.HttpProcessingError(
+                message='CloudFlare returned HTTP 403. Your IP could be banned on CF '
+                        'or reCAPTCHA appeared. This error can be disabled with '
+                        'allow_403=True flag in request parameters e.g. '
+                        'session.get(url, allow_403=True).', headers=resp.headers)
 
         # Otherwise, no Cloudflare anti-bot detected
         return resp
 
     @asyncio.coroutine
-    def solve_cf_challenge(self, resp, **kwargs):
+    def solve_cf_challenge(self, resp, **original_kwargs):
         # https://pypi.python.org/pypi/cfscrape has been used as the solution.
         # The code below (with changes) has been inherited from mentioned lib.
 
         yield from asyncio.sleep(5, loop=self._loop)  # Cloudflare requires a delay before solving the challenge
 
         body = yield from resp.text()
-        url = str(resp.url)
-        parsed_url = urlparse(url)
+        parsed_url = urlparse(str(resp.url))
         domain = parsed_url.netloc
         submit_url = '{}://{}/cdn-cgi/l/chk_jschl'.format(parsed_url.scheme, domain)
 
-        params = kwargs.setdefault("params", {})
-        headers = kwargs.setdefault("headers", {})
-        headers["Referer"] = url
+        cloudflare_kwargs = deepcopy(original_kwargs)
+
+        params = cloudflare_kwargs.setdefault("params", {})
+        headers = cloudflare_kwargs.setdefault("headers", {})
+        headers["Referer"] = str(resp.url)
 
         try:
             params["jschl_vc"] = re.search(r'name="jschl_vc" value="(\w+)"', body).group(1)
@@ -85,8 +87,17 @@ class CloudflareScraper(aiohttp.ClientSession):
         # Safely evaluate the Javascript expression
         js = js.replace('return', '')
         params["jschl_answer"] = str(int(js2py.eval_js(js)) + len(domain))
+        method = 'GET'
+        cloudflare_kwargs["allow_redirects"] = False
+        redirect = yield from self._request(method, submit_url, **cloudflare_kwargs)
+        redirect_location = urlparse(redirect.headers["Location"])
+
+        if not redirect_location.netloc:
+            redirect_url = "%s://%s%s" % (parsed_url.scheme, domain, redirect_location.path)
+            resp.close()
+            return (yield from self._request(method, redirect_url, **original_kwargs))
         resp.close()
-        return (yield from self._request('GET', submit_url, **kwargs))
+        return (yield from self._request(method, redirect.headers["Location"], **original_kwargs))
 
     def extract_js(self, body):
         js = re.search(r"setTimeout\(function\(\){\s+(var "
