@@ -1,11 +1,11 @@
-import re
-import random
 import asyncio
 import logging
+import random
+import re
+from copy import deepcopy
 
 import aiohttp
 import js2py
-from copy import deepcopy
 
 try:
     from urlparse import urlparse
@@ -28,13 +28,12 @@ class CloudflareScraper(aiohttp.ClientSession):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    @asyncio.coroutine
-    def _request(self, method, url, *args, allow_403=False, **kwargs):
-        resp = yield from super()._request(method, url, *args, **kwargs)
+    async def _request(self, method, url, *args, allow_403=False, **kwargs):
+        resp = await super()._request(method, url, *args, **kwargs)
 
         # Check if Cloudflare anti-bot is on
         if resp.status == 503 and resp.headers.get("Server").startswith("cloudflare"):
-            return (yield from self.solve_cf_challenge(resp, **kwargs))
+            return await self.solve_cf_challenge(resp, **kwargs)
 
         elif resp.status == 403 and resp.headers.get("Server").startswith("cloudflare") and not allow_403:
             resp.close()
@@ -47,14 +46,13 @@ class CloudflareScraper(aiohttp.ClientSession):
         # Otherwise, no Cloudflare anti-bot detected
         return resp
 
-    @asyncio.coroutine
-    def solve_cf_challenge(self, resp, **original_kwargs):
+    async def solve_cf_challenge(self, resp, **original_kwargs):
         # https://pypi.python.org/pypi/cfscrape has been used as the solution.
         # The code below (with changes) has been inherited from mentioned lib.
 
-        yield from asyncio.sleep(5, loop=self._loop)  # Cloudflare requires a delay before solving the challenge
+        await asyncio.sleep(5, loop=self._loop)  # Cloudflare requires a delay before solving the challenge
 
-        body = yield from resp.text()
+        body = await resp.text()
         parsed_url = urlparse(str(resp.url))
         domain = parsed_url.netloc
         submit_url = '{}://{}/cdn-cgi/l/chk_jschl'.format(parsed_url.scheme, domain)
@@ -89,15 +87,15 @@ class CloudflareScraper(aiohttp.ClientSession):
         params["jschl_answer"] = str(int(js2py.eval_js(js)) + len(domain))
         method = 'GET'
         cloudflare_kwargs["allow_redirects"] = False
-        redirect = yield from self._request(method, submit_url, **cloudflare_kwargs)
+        redirect = await self._request(method, submit_url, **cloudflare_kwargs)
         redirect_location = urlparse(redirect.headers["Location"])
 
         if not redirect_location.netloc:
             redirect_url = "%s://%s%s" % (parsed_url.scheme, domain, redirect_location.path)
             resp.close()
-            return (yield from self._request(method, redirect_url, **original_kwargs))
+            return await self._request(method, redirect_url, **original_kwargs)
         resp.close()
-        return (yield from self._request(method, redirect.headers["Location"], **original_kwargs))
+        return await self._request(method, redirect.headers["Location"], **original_kwargs)
 
     def extract_js(self, body):
         js = re.search(r"setTimeout\(function\(\){\s+(var "
