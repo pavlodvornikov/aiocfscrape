@@ -86,7 +86,7 @@ class CloudflareScraper(aiohttp.ClientSession):
 
         # Safely evaluate the Javascript expression
         js = js.replace('return', '')
-        params["jschl_answer"] = str(int(js2py.eval_js(js)) + len(domain))
+        params["jschl_answer"] = str(float(js2py.eval_js(js)) + len(domain))
         method = 'GET'
         cloudflare_kwargs["allow_redirects"] = False
         redirect = yield from self._request(method, submit_url, **cloudflare_kwargs)
@@ -102,11 +102,13 @@ class CloudflareScraper(aiohttp.ClientSession):
     def extract_js(self, body):
         js = re.search(r"setTimeout\(function\(\){\s+(var "
                        "s,t,o,p,b,r,e,a,k,i,n,g,f.+?\r?\n[\s\S]+?a\.value =.+?)\r?\n", body).group(1)
-        js = re.sub(r"a\.value = (parseInt\(.+?\)).+", r"\1", js)
-        js = re.sub(r"\s{3,}[a-z](?: = |\.).+", "", js)
+
+        js = re.sub(r"a\.value = (.+ \+ t\.length).+", r"\1", js)
+
+        js = re.sub(r"\s{3,}[a-z](?: = |\.).+", "", js).replace("+ t.length", "")
 
         # Strip characters that could be used to exit the string context
         # These characters are not currently used in Cloudflare's arithmetic snippet
         js = re.sub(r"[\n\\']", "", js)
 
-        return js.replace("parseInt", "return parseInt")
+        return js
