@@ -32,10 +32,10 @@ class CloudflareScraper(aiohttp.ClientSession):
         resp = await super()._request(method, url, *args, **kwargs)
 
         # Check if Cloudflare anti-bot is on
-        if resp.status == 503 and resp.headers.get("Server").startswith("cloudflare"):
+        if resp.status == 503 and resp.headers.get("Server", "").startswith("cloudflare"):
             return await self.solve_cf_challenge(resp, **kwargs)
 
-        elif resp.status == 403 and resp.headers.get("Server").startswith("cloudflare") and not allow_403:
+        elif resp.status == 403 and resp.headers.get("Server", "").startswith("cloudflare") and not allow_403:
             resp.close()
             raise aiohttp.http_exceptions.HttpProcessingError(
                 message='CloudFlare returned HTTP 403. Your IP could be banned on CF '
