@@ -101,7 +101,7 @@ class CloudflareScraper(aiohttp.ClientSession):
         js = re.search(r"setTimeout\(function\(\){\s+(var "
                        "s,t,o,p,b,r,e,a,k,i,n,g,f.+?\r?\n[\s\S]+?a\.value =.+?)\r?\n", body).group(1)
 
-        js = re.sub(r"a\.value = (.+ \+ t\.length).+", r"\1", js)
+        js = re.sub(r"a\.value = (.+ \+ t\.length(\).toFixed\(10\))?).+", r"\1", js)
 
         js = re.sub(r"\s{3,}[a-z](?: = |\.).+", "", js).replace("+ t.length", "")
 
