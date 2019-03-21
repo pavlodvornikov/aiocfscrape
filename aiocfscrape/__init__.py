@@ -66,6 +66,7 @@ class CloudflareScraper(aiohttp.ClientSession):
         try:
             params["jschl_vc"] = re.search(r'name="jschl_vc" value="(\w+)"', body).group(1)
             params["pass"] = re.search(r'name="pass" value="(.+?)"', body).group(1)
+            params["s"] = re.search(r'name="s"\svalue="(?P<s_value>[^"]+)', body).group('s_value')
 
             # Extract the arithmetic operation
             js = self.extract_js(body)
