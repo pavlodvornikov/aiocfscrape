@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name = 'aiocfscrape',
     packages = ['aiocfscrape'],
-    version = '0.0.9',
+    version = '0.0.10.dev0',
     description = 'A simple async Python module to bypass Cloudflare\'s anti-bot page. See https://github.com/pavlodvornikov/aiocfscrape for more information.',
     author = 'pavlodvornikov',
     author_email = 'pavlodvornikov@gmail.com',
