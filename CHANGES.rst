@@ -2,8 +2,8 @@ Changelog
 =========
 
 
-0.0.10 (unreleased)
--------------------
+1.0.0 (2020-03-25)
+------------------
 
 - Update anti-bot integration to latest cfscrape version [Nachtalb]
 - Constrain aiohttp to <4a because of https://github.com/aio-libs/aiohttp/pull/3933 [Nachtalb]
