@@ -66,11 +66,10 @@ Dependencies
 
 - Python `3.5.3+`
 - `aiohttp <https://pypi.python.org/pypi/aiohttp>`_ ``>=3.1.3, <4a``
-- `js2py <https://pypi.python.org/pypi/Js2Py>`_
+- `node <https://nodejs.org/en/download/>`_`>`_
 
 
 License
 =======
 
 aiocfscrape is offered under the MIT license.
-
