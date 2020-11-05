@@ -89,7 +89,7 @@ class CloudflareScraper(aiohttp.ClientSession):
 
         # Check if Cloudflare captcha challenge is presented
         if await self.is_cloudflare_captcha_challenge(resp, allow_403):
-            self.handle_captcha_challenge(resp, url)
+            self.handle_captcha_challenge(resp)
 
         # Check if Cloudflare anti-bot "I'm Under Attack Mode" is enabled
         if await self.is_cloudflare_iuam_challenge(resp):
@@ -113,10 +113,10 @@ class CloudflareScraper(aiohttp.ClientSession):
             and b'/cdn-cgi/l/chk_captcha' in await resp.read()
         )
 
-    def handle_captcha_challenge(self, resp, url):
+    def handle_captcha_challenge(self, resp):
         error = (
             'Cloudflare captcha challenge presented for %s (cfscrape cannot solve captchas)'
-            % urlparse(url).netloc
+            % resp.url.host
         )
         if ssl.OPENSSL_VERSION_NUMBER < 0x10101000:
             error += '. Your OpenSSL version is lower than 1.1.1. Please upgrade your OpenSSL library and recompile Python.'
@@ -131,11 +131,9 @@ class CloudflareScraper(aiohttp.ClientSession):
         start_time = time.time()
 
         body = await resp.text()
-        parsed_url = urlparse(resp.url)
-        domain = parsed_url.netloc
         challenge_form = re.search(r'\<form.*?id=\"challenge-form\".*?\/form\>', body, flags=re.S).group(0)  # find challenge form
         method = re.search(r'method=\"(.*?)\"', challenge_form, flags=re.S).group(1)
-        submit_url = '%s://%s%s' % (parsed_url.scheme, domain,
+        submit_url = '%s://%s%s' % (resp.url.scheme, resp.url.host,
                                     re.search(r'action=\"(.*?)\"', challenge_form, flags=re.S).group(1).split('?')[0])
 
         cloudflare_kwargs = copy.deepcopy(original_kwargs)
@@ -202,8 +200,8 @@ class CloudflareScraper(aiohttp.ClientSession):
             if not redirect_location.netloc:
                 redirect_url = urlunparse(
                     (
-                        parsed_url.scheme,
-                        domain,
+                        resp.url.scheme,
+                        resp.url.host,
                         redirect_location.path,
                         redirect_location.params,
                         redirect_location.query,
