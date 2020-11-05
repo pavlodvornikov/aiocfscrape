@@ -135,8 +135,6 @@ class CloudflareScraper(aiohttp.ClientSession):
         domain = parsed_url.netloc
         challenge_form = re.search(r'\<form.*?id=\"challenge-form\".*?\/form\>', body, flags=re.S).group(0)  # find challenge form
         method = re.search(r'method=\"(.*?)\"', challenge_form, flags=re.S).group(1)
-        if self.org_method is None:
-            self.org_method = resp.request.method
         submit_url = '%s://%s%s' % (parsed_url.scheme, domain,
                                     re.search(r'action=\"(.*?)\"', challenge_form, flags=re.S).group(1).split('?')[0])
 
@@ -197,6 +195,7 @@ class CloudflareScraper(aiohttp.ClientSession):
 
         # Send the challenge response and handle the redirect manually
         redirect = await self._request(method, submit_url, **cloudflare_kwargs)
+        original_method = resp.request_info.method
         if 'Location' in redirect.headers:
             redirect_location = urlparse(redirect.headers['Location'])
 
@@ -218,13 +217,13 @@ class CloudflareScraper(aiohttp.ClientSession):
         elif 'Set-Cookie' in redirect.headers:
             if 'cf_clearance' in redirect.headers['Set-Cookie']:
                 resp.close()
-                return self._request(self.org_method, submit_url, cookies=redirect.cookies)
+                return self._request(original_method, submit_url, cookies=redirect.cookies)
             else:
                 resp.close()
                 return self._request(method, submit_url, **original_kwargs)
         else:
             resp.close()
-            return self._request(self.org_method, submit_url, **cloudflare_kwargs)
+            return self._request(original_method, submit_url, **cloudflare_kwargs)
 
     async def solve_challenge(self, body, domain):
         try:
