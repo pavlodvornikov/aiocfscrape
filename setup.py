@@ -22,7 +22,6 @@ setup(name='aiocfscrape',
       zip_safe=False,
 
       install_requires=[
-          'js2py',
           'aiohttp >= 3.1.3, <4a',
       ],
       )

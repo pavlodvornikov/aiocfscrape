@@ -5,11 +5,11 @@ from urllib.parse import urlparse, urlunparse
 import aiohttp
 import asyncio
 import copy
-import js2py
 import logging
 import random
 import re
 import ssl
+import subprocess
 import time
 
 USER_AGENTS = [
@@ -68,6 +68,9 @@ Please read https://github.com/pavlodvornikov/aiocfscrape#updates, then file a \
 bug report at https://github.com/pavlodvornikov/aiocfscrape/issues."\
 """
 
+# Remove a few problematic TLSv1.0 ciphers from the defaults
+ssl._DEFAULT_CIPHERS += ":!ECDHE+SHA:!AES128-SHA:!AESCCM:!DHE:!ARIA"
+
 
 class CloudflareCaptchaError(aiohttp.ClientResponseError):
     pass
@@ -76,7 +79,13 @@ class CloudflareCaptchaError(aiohttp.ClientResponseError):
 class CloudflareScraper(aiohttp.ClientSession):
 
     async def _request(self, method, url, *args, allow_403=False, **kwargs):
-        resp = await super()._request(method, url, *args, **kwargs)
+        if 'ssl' in kwargs:
+            context = kwargs.pop('ssl')
+        else:
+            context = ssl.create_default_context()
+            context.set_ciphers(ssl._DEFAULT_CIPHERS)
+
+        resp = await super()._request(method, url, ssl=context, *args, **kwargs)
 
         # Check if Cloudflare captcha challenge is presented
         if await self.is_cloudflare_captcha_challenge(resp, allow_403):
@@ -134,8 +143,8 @@ class CloudflareScraper(aiohttp.ClientSession):
         cloudflare_kwargs = copy.deepcopy(original_kwargs)
 
         headers = cloudflare_kwargs.setdefault('headers', {})
-        headers['Referer'] = resp.url
 
+        headers['Referer'] = resp.url
         try:
             cloudflare_kwargs['params'] = dict()
             cloudflare_kwargs['data'] = dict()
@@ -171,7 +180,7 @@ class CloudflareScraper(aiohttp.ClientSession):
             )
 
         # Solve the Javascript challenge
-        answer, delay = self.solve_challenge(body, domain)
+        answer, delay = await self.solve_challenge(body, domain)
         if method == 'POST':
             cloudflare_kwargs['data']['jschl_answer'] = answer
         elif method == 'GET':
@@ -217,10 +226,10 @@ class CloudflareScraper(aiohttp.ClientSession):
             resp.close()
             return self._request(self.org_method, submit_url, **cloudflare_kwargs)
 
-    def solve_challenge(self, body, domain):
+    async def solve_challenge(self, body, domain):
         try:
-            javascript = re.search(r'\<script type\=\"text\/javascript\"\>\n(.*?)\<\/script\>', body, flags=re.S).group(1)  # find javascript
-
+            all_scripts = re.findall(r'\<script type\=\"text\/javascript\"\>\n(.*?)\<\/script\>',body, flags=re.S)
+            javascript = next(filter(lambda w: "jschl-answer" in w, all_scripts))  # find the script tag which would have obfuscated js
             challenge, ms = re.search(
                 r'setTimeout\(function\(\){\s*(var '
                 r's,t,o,p,b,r,e,a,k,i,n,g,f.+?\r?\n[\s\S]+?a\.value\s*=.+?)\r?\n'
@@ -255,7 +264,7 @@ class CloudflareScraper(aiohttp.ClientSession):
                 challenge,
             )
             # Encode the challenge for security while preserving quotes and spacing.
-            challenge = b64encode(challenge.encode("utf-8")).decode("ascii")
+            challenge = b64encode(challenge.encode('utf-8')).decode('ascii')
             # Use the provided delay, parsed delay, or default to 8 secs
             delay = self.delay or (float(ms) / float(1000) if ms else 8)
         except Exception:
@@ -289,7 +298,25 @@ class CloudflareScraper(aiohttp.ClientSession):
         )
 
         try:
-            result = js2py.eval_js(js)
+            node = await asyncio.create_subprocess_shell(
+                'node',
+                stdin=asyncio.subprocess.PIP,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            stdout, stderr = await node.communicate(js)
+
+            if node.returncode != 0:
+                stderr = 'Node.js Exception:\n%s' % (stderr or None)
+                raise subprocess.CalledProcessError(node.returncode, 'node -e ...', stderr)
+        except OSError as e:
+            if e.errno == 2:
+                raise EnvironmentError(
+                    'Missing Node.js runtime. Node is required and must be in the PATH (check with `node -v`). Your Node binary may be called `nodejs` rather than `node`, in which case you may need to run `apt-get install nodejs-legacy` on some Debian-based systems. (Please read the cfscrape'
+                    ' README\'s Dependencies section: https://github.com/Anorov/cloudflare-scrape#dependencies.'
+                )
+            raise
         except Exception:
             logging.error('Error executing Cloudflare IUAM Javascript. %s' % BUG_REPORT)
             raise

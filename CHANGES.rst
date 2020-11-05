@@ -5,7 +5,8 @@ Changelog
 1.0.1 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Update anti-bot integration to cfscrape version 2.1.1 [Nachtalb]
+  With this we use nodejs for the JS challenge - more info in the README
 
 
 1.0.0 (2020-03-25)
